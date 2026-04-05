@@ -327,7 +327,7 @@ export function createAlbumLink(
 ): { success: boolean; error?: string } {
   try {
     db.prepare(
-      'INSERT OR IGNORE INTO trip_album_links (trip_id, user_id, immich_album_id, album_name) VALUES (?, ?, ?, ?)'
+      "INSERT OR IGNORE INTO trip_album_links (trip_id, user_id, album_id, album_name, provider) VALUES (?, ?, ?, ?, 'immich')"
     ).run(tripId, userId, albumId, albumName || '');
     return { success: true };
   } catch {
@@ -336,8 +336,13 @@ export function createAlbumLink(
 }
 
 export function deleteAlbumLink(linkId: string, tripId: string, userId: number) {
-  db.prepare('DELETE FROM trip_album_links WHERE id = ? AND trip_id = ? AND user_id = ?')
-    .run(linkId, tripId, userId);
+  db.transaction(() => {
+    const link = db.prepare('SELECT id FROM trip_album_links WHERE id = ? AND trip_id = ? AND user_id = ?').get(linkId, tripId, userId);
+    if (link) {
+      db.prepare('DELETE FROM trip_photos WHERE trip_id = ? AND album_link_id = ?').run(tripId, linkId);
+      db.prepare('DELETE FROM trip_album_links WHERE id = ?').run(linkId);
+    }
+  })();
 }
 
 export async function syncAlbumAssets(

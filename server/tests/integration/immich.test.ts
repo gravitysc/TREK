@@ -161,14 +161,14 @@ describe('Immich album links', () => {
 
     const link = testDb.prepare('SELECT * FROM trip_album_links WHERE trip_id = ? AND user_id = ?').get(trip.id, user.id) as any;
     expect(link).toBeDefined();
-    expect(link.immich_album_id).toBe('album-uuid-123');
+    expect(link.album_id).toBe('album-uuid-123');
     expect(link.album_name).toBe('Vacation 2024');
   });
 
   it('IMMICH-021 — GET album-links returns linked albums', async () => {
     const { user } = createUser(testDb);
     const trip = testDb.prepare('INSERT INTO trips (user_id, title) VALUES (?, ?) RETURNING *').get(user.id, 'Test Trip') as any;
-    testDb.prepare('INSERT INTO trip_album_links (trip_id, user_id, immich_album_id, album_name) VALUES (?, ?, ?, ?)').run(trip.id, user.id, 'album-abc', 'My Album');
+    testDb.prepare('INSERT INTO trip_album_links (trip_id, user_id, album_id, album_name, provider) VALUES (?, ?, ?, ?, ?)').run(trip.id, user.id, 'album-abc', 'My Album', 'immich');
 
     const res = await request(app)
       .get(`/api/integrations/immich/trips/${trip.id}/album-links`)
@@ -177,7 +177,7 @@ describe('Immich album links', () => {
     expect(res.status).toBe(200);
     expect(res.body.links).toBeDefined();
     expect(res.body.links.length).toBe(1);
-    expect(res.body.links[0].immich_album_id).toBe('album-abc');
+    expect(res.body.links[0].album_id).toBe('album-abc');
   });
 
   it('IMMICH-022 — DELETE album-links removes associated photos but not individually-added ones', async () => {
@@ -185,15 +185,15 @@ describe('Immich album links', () => {
     const trip = testDb.prepare('INSERT INTO trips (user_id, title) VALUES (?, ?) RETURNING *').get(user.id, 'Test Trip') as any;
 
     // Create album link
-    const linkResult = testDb.prepare('INSERT INTO trip_album_links (trip_id, user_id, immich_album_id, album_name) VALUES (?, ?, ?, ?) RETURNING *')
-      .get(trip.id, user.id, 'album-xyz', 'Album XYZ') as any;
+    const linkResult = testDb.prepare('INSERT INTO trip_album_links (trip_id, user_id, album_id, album_name, provider) VALUES (?, ?, ?, ?, ?) RETURNING *')
+      .get(trip.id, user.id, 'album-xyz', 'Album XYZ', 'immich') as any;
 
     // Insert photos synced from the album
-    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, immich_asset_id, shared, album_link_id) VALUES (?, ?, ?, 1, ?)').run(trip.id, user.id, 'asset-001', linkResult.id);
-    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, immich_asset_id, shared, album_link_id) VALUES (?, ?, ?, 1, ?)').run(trip.id, user.id, 'asset-002', linkResult.id);
+    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, asset_id, provider, shared, album_link_id) VALUES (?, ?, ?, ?, 1, ?)').run(trip.id, user.id, 'asset-001', 'immich', linkResult.id);
+    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, asset_id, provider, shared, album_link_id) VALUES (?, ?, ?, ?, 1, ?)').run(trip.id, user.id, 'asset-002', 'immich', linkResult.id);
 
     // Insert an individually-added photo (no album_link_id)
-    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, immich_asset_id, shared) VALUES (?, ?, ?, 1)').run(trip.id, user.id, 'asset-manual');
+    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, asset_id, provider, shared) VALUES (?, ?, ?, ?, 1)').run(trip.id, user.id, 'asset-manual', 'immich');
 
     const res = await request(app)
       .delete(`/api/integrations/immich/trips/${trip.id}/album-links/${linkResult.id}`)
@@ -205,7 +205,7 @@ describe('Immich album links', () => {
     // Album-linked photos should be gone
     const remainingPhotos = testDb.prepare('SELECT * FROM trip_photos WHERE trip_id = ?').all(trip.id) as any[];
     expect(remainingPhotos.length).toBe(1);
-    expect(remainingPhotos[0].immich_asset_id).toBe('asset-manual');
+    expect(remainingPhotos[0].asset_id).toBe('asset-manual');
 
     // Album link itself should be gone
     const link = testDb.prepare('SELECT * FROM trip_album_links WHERE id = ?').get(linkResult.id);
@@ -217,9 +217,9 @@ describe('Immich album links', () => {
     const { user: other } = createUser(testDb);
     const trip = testDb.prepare('INSERT INTO trips (user_id, title) VALUES (?, ?) RETURNING *').get(owner.id, 'Test Trip') as any;
 
-    const linkResult = testDb.prepare('INSERT INTO trip_album_links (trip_id, user_id, immich_album_id, album_name) VALUES (?, ?, ?, ?) RETURNING *')
-      .get(trip.id, owner.id, 'album-secret', 'Secret Album') as any;
-    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, immich_asset_id, shared, album_link_id) VALUES (?, ?, ?, 1, ?)').run(trip.id, owner.id, 'asset-owned', linkResult.id);
+    const linkResult = testDb.prepare('INSERT INTO trip_album_links (trip_id, user_id, album_id, album_name, provider) VALUES (?, ?, ?, ?, ?) RETURNING *')
+      .get(trip.id, owner.id, 'album-secret', 'Secret Album', 'immich') as any;
+    testDb.prepare('INSERT INTO trip_photos (trip_id, user_id, asset_id, provider, shared, album_link_id) VALUES (?, ?, ?, ?, 1, ?)').run(trip.id, owner.id, 'asset-owned', 'immich', linkResult.id);
 
     // Other user tries to delete owner's album link
     const res = await request(app)
@@ -231,7 +231,7 @@ describe('Immich album links', () => {
     // Link and photos should still exist
     const link = testDb.prepare('SELECT * FROM trip_album_links WHERE id = ?').get(linkResult.id);
     expect(link).toBeDefined();
-    const photo = testDb.prepare('SELECT * FROM trip_photos WHERE immich_asset_id = ?').get('asset-owned');
+    const photo = testDb.prepare('SELECT * FROM trip_photos WHERE asset_id = ?').get('asset-owned');
     expect(photo).toBeDefined();
   });
 
