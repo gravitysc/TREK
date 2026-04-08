@@ -1,0 +1,13 @@
+apiVersion: v1
+entries:
+  trek:
+  - apiVersion: v2
+    appVersion: 2.9.13
+    created: "2026-04-08T11:38:59.455421402Z"
+    description: Minimal Helm chart for TREK app
+    digest: da8e821e7fa93baf4c3c9bd3d3cadf925f726d104863050be248e15f52e7e68c
+    name: trek
+    urls:
+    - https://gravitysc.github.io/TREK/trek-2.9.13.tgz
+    version: 2.9.13
+generated: "2026-04-08T11:38:59.454626119Z"
